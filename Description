@@ -1,0 +1,106 @@
+Для начала нужно создать Django-проект и приложение для сервиса друзей. Для этого нужно выполнить команды:
+
+
+django-admin startproject friends_service
+cd friends_service
+python manage.py startapp friends
+
+
+Затем нужно создать модель пользователя и миграции для нее. Модель будет содержать поля id и username. Для этого нужно создать файл models.py в папке friends и написать следующий код:
+
+
+from django.db import models
+
+class User(models.Model):
+    username = models.CharField(max_length=255)
+
+
+Затем нужно выполнить команды:
+
+
+python manage.py makemigrations friends
+python manage.py migrate
+
+
+Далее нужно создать представления (views) для всех функций сервиса. Для этого нужно создать файл views.py в папке friends и написать следующий код:
+
+
+from django.shortcuts import render, get_object_or_404
+from django.http import JsonResponse
+from .models import User
+
+def register(request):
+    if request.method == 'POST':
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        email = request.POST.get('email')
+        user = User.objects.create_user(username=username, password=password, email=email)
+        return JsonResponse({'status': 'success'})
+    return render(request, 'register.html')
+
+def send_friend_request(request, user_id):
+    friend = get_object_or_404(User, id=user_id)
+    request.user.friend_requests.add(friend)
+    return JsonResponse({'status': 'success'})
+
+def accept_friend_request(request, user_id):
+    friend = get_object_or_404(User, id=user_id)
+    request.user.friends.add(friend)
+    request.user.friend_requests.remove(friend)
+    friend.friends.add(request.user)
+    return JsonResponse({'status': 'success'})
+
+def reject_friend_request(request, user_id):
+    friend = get_object_or_404(User, id=user_id)
+    request.user.friend_requests.remove(friend)
+    return JsonResponse({'status': 'success'})
+
+def incoming_friend_requests(request):
+    friend_requests = request.user.friend_requests.all()
+    return render(request, 'friend_requests.html', {'friend_requests': friend_requests})
+
+def outgoing_friend_requests(request):
+    friend_requests = request.user.requested_friends.all()
+    return render(request, 'friend_requests.html', {'friend_requests': friend_requests})
+
+def friend_list(request):
+    friends = request.user.friends.all()
+    return render(request, 'friend_list.html', {'friends': friends})
+
+def friendship_status(request, user_id):
+    friend = get_object_or_404(User, id=user_id)
+    if friend in request.user.friends.all():
+        status = 'Friends'
+    elif friend in request.user.friend_requests.all():
+        status = 'Request Sent'
+    elif request.user in friend.friend_requests.all():
+        status = 'Request Received'
+    else:
+        status = 'Not Connected'
+    return JsonResponse({'status': status})
+
+def remove_friend(request, user_id):
+    friend = get_object_or_404(User, id=user_id)
+    request.user.friends.remove(friend)
+    friend.friends.remove(request.user)
+    return JsonResponse({'status': 'success'})
+
+
+Затем нужно создать маршруты (URLs) для каждого представления в файле urls.py в папке friends:
+
+
+from django.urls import path
+from . import views
+
+urlpatterns = [
+    path('register/', views.register, name='register'),
+    path('send_friend_request/<int:user_id>/', views.send_friend_request, name='send_friend_request'),
+    path('accept_friend_request/<int:user_id>/', views.accept_friend_request, name='accept_friend_request'),
+    path('reject_friend_request/<int:user_id>/', views.reject_friend_request, name='reject_friend_request'),
+    path('incoming_friend_requests/', views.incoming_friend_requests, name='incoming_friend_requests'),
+    path('outgoing_friend_requests/', views.outgoing_friend_requests, name='outgoing_friend_requests'),
+    path('friend_list/', views.friend_list, name='friend_list'),
+    path('friendship_status/<int:user_id>/', views.friendship_status, name='friendship_status'),
+    path('remove_friend/<int:user_id>/', views.remove_friend, name='remove_friend'),
+]
+
